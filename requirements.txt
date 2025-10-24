@@ -1,0 +1,5 @@
+qiskit==1.2.2
+pyzx==0.8.1
+matplotlib
+numpy
+
