@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quantum_optimiser"
+version = "0.1.0"
+description = "A ZX calculus-based quantum circuit optimiser"
+authors = [
+    { name="Sanjana Darbha" }
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "qiskit",
+    "pyzx",
+    "numpy",
+    "matplotlib"
+]
