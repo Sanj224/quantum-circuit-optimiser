@@ -13,8 +13,8 @@ def circuit_gate_count(circuit):
 # Number of two qubit gates
 def circuit_two_qubit_gate_count(circuit):
     return sum(1 for instruction in circuit.data if instruction.operation.num_qubits == 2)
-# Number of T gates
 
+# Number of T gates
 def circuit_t_gate_count(circuit):
     return sum(1 for instruction in circuit.data if instruction.operation.name == 't')
 
@@ -22,9 +22,6 @@ def circuit_t_gate_count(circuit):
 def circuit_clifford_gate_count(circuit):
     clifford_gates = {'h', 'x', 'y', 'z', 's', 'sdg', 'cx', 'cy', 'cz', 'swap', 'id', 'i'}
     return sum(1 for instruction in circuit.data if instruction.operation.name in clifford_gates)
-# fidelity
-
-# Coupling Map
 
 
 
