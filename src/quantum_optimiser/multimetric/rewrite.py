@@ -4,7 +4,7 @@ import pyzx as zx
 from pyzx import basicrules as br
 from pyzx.graph.base import BaseGraph, VT, ET
 from typing import Union, List, Tuple, Optional
-
+from .. import integration
 
 def try_color_change(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
     """Try to color change vertex v. Returns new graph if successful, False otherwise."""
@@ -12,6 +12,8 @@ def try_color_change(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bo
         return False
     g_new = g.copy()
     br.color_change(g_new, v)
+    if not integration.can_convert_to_circuit(g_new):
+        return False
     return g_new
 
 
@@ -21,6 +23,8 @@ def try_copy_X(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
         return False
     g_new = g.copy()
     br.copy_X(g_new, v)
+    if not integration.can_convert_to_circuit(g_new):
+        return False
     return g_new
 
 
@@ -30,6 +34,8 @@ def try_copy_Z(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
         return False
     g_new = g.copy()
     br.copy_Z(g_new, v)
+    if not integration.can_convert_to_circuit(g_new):
+        return False
     return g_new
 
 
@@ -39,6 +45,8 @@ def try_pi_commute_Z(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bo
         return False
     g_new = g.copy()
     br.pi_commute_Z(g_new, v)
+    if not integration.can_convert_to_circuit(g_new):
+        return False
     return g_new
 
 
@@ -48,6 +56,8 @@ def try_pi_commute_X(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bo
         return False
     g_new = g.copy()
     br.pi_commute_X(g_new, v)
+    if not integration.can_convert_to_circuit(g_new):
+        return False
     return g_new
 
 
@@ -57,6 +67,8 @@ def try_remove_id(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]
         return False
     g_new = g.copy()
     br.remove_id(g_new, v)
+    if not integration.can_convert_to_circuit(g_new):
+        return False
     return g_new
 
 
@@ -69,6 +81,8 @@ def try_strong_comp(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], boo
         if br.check_strong_comp(g, v, w):
             g_new = g.copy()
             br.strong_comp(g_new, v, w)
+            if not integration.can_convert_to_circuit(g_new):
+                return False
             return g_new
     return False
 
@@ -82,39 +96,67 @@ def try_fuse(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
         if br.check_fuse(g, v, w):
             g_new = g.copy()
             br.fuse(g_new, v, w)
+            if not integration.can_convert_to_circuit(g_new):
+                return False
             return g_new
+
     return False
 
 
 def get_applicable_rules(g: BaseGraph[VT, ET], v: VT) -> List[str]:
     """
     Get list of all rules applicable to vertex v.
-    Returns list of rule names without applying them or copying the graph.
+    Actually tests each rule on a copy to ensure it will work.
     """
     applicable = []
     
-    if br.check_color_change(g, v):
-        applicable.append('color_change')
-    if br.check_copy_X(g, v):
-        applicable.append('copy_X')
-    if br.check_copy_Z(g, v):
-        applicable.append('copy_Z')
-    if br.check_pi_commute_Z(g, v):
-        applicable.append('pi_commute_Z')
-    if br.check_pi_commute_X(g, v):
-        applicable.append('pi_commute_X')
-    if br.check_remove_id(g, v):
-        applicable.append('remove_id')
+    # Single vertex rules - test them
+    single_rules = [
+        ('color_change', br.check_color_change, br.color_change),
+        ('copy_X', br.check_copy_X, br.copy_X),
+        ('copy_Z', br.check_copy_Z, br.copy_Z),
+        ('pi_commute_Z', br.check_pi_commute_Z, br.pi_commute_Z),
+        ('pi_commute_X', br.check_pi_commute_X, br.pi_commute_X),
+        ('remove_id', br.check_remove_id, br.remove_id),
+    ]
     
-    # Check pair-wise rules
-    for w in g.neighbors(v):
-        if br.check_strong_comp(g, v, w):
-            applicable.append(f'strong_comp_with_{w}')
-        if br.check_fuse(g, v, w):
-            applicable.append(f'fuse_with_{w}')
+    for rule_name, check_func, apply_func in single_rules:
+        try:
+            if check_func(g, v):
+                # Actually try applying it to a copy
+                g_test = g.copy()
+                apply_func(g_test, v)
+                # If we got here without exception, it works
+                applicable.append(rule_name)
+        except Exception:
+            # Rule failed, don't add it
+            pass
+    
+    # Pair-wise rules - test them
+    try:
+        neighbors = list(g.neighbors(v))
+        for w in neighbors:
+            # Test strong_comp
+            try:
+                if br.check_strong_comp(g, v, w):
+                    g_test = g.copy()
+                    br.strong_comp(g_test, v, w)
+                    applicable.append(f'strong_comp_with_{w}')
+            except Exception:
+                pass
+            
+            # Test fuse
+            try:
+                if br.check_fuse(g, v, w):
+                    g_test = g.copy()
+                    br.fuse(g_test, v, w)
+                    applicable.append(f'fuse_with_{w}')
+            except Exception:
+                pass
+    except Exception:
+        pass
     
     return applicable
-
 
 def apply_all_rules_at_vertex(g: BaseGraph[VT, ET], v: VT) -> List[Tuple[str, BaseGraph[VT, ET]]]:
     """
