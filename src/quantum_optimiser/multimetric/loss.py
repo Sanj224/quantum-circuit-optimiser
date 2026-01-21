@@ -1,6 +1,7 @@
 from . import metrics
-
-
+import math
+import numpy as np
+from .. import integration
 # Add up all the metrics
 def naive_loss(circuit):
     a = metrics.circuit_qubit_count(circuit)
@@ -35,3 +36,67 @@ def informed_loss_diagram(diagram):
     e = metrics.graph_t_gate_count(diagram)
     return 0.1*a+0.2*b+0.1*c+0.1*d+0.5*e
 
+def exponential_loss_diagram(diagram):
+    a = metrics.graph_qubit_count(diagram)
+    b = metrics.graph_two_qubit_gate_count(diagram)
+    c = metrics.graph_gate_count(diagram)
+    d = metrics.graph_clifford_gate_count(diagram)
+    e = metrics.graph_t_gate_count(diagram)
+    
+    return (
+        0.1 * a**1.5 +
+        0.15 * b**1.2 +
+        0.05 * np.log1p(c) +
+        0.05 * np.log1p(d) +
+        0.65 * np.exp(0.1 * e)
+    )
+
+def quadratic_loss_circuit(circuit):
+    q = metrics.circuit_qubit_count(circuit)
+    g2 = metrics.circuit_two_qubit_gate_count(circuit)
+    g = metrics.circuit_gate_count(circuit)
+    gC = metrics.circuit_clifford_gate_count(circuit)
+    t = metrics.circuit_t_gate_count(circuit)
+
+    w_q  = 0.05
+    w_g2 = 0.08
+    w_g  = 0.01
+    w_gC = 0.005
+    w_t  = 0.12
+
+    return (
+        w_q  * q +
+        w_g  * g +
+        w_gC * gC +
+        w_g2 * (g2 ** 2) +
+        w_t  * (t ** 2)
+    )
+
+
+def cost_function_from_circuit(circuit_cost_fn):
+    """
+    Wraps a circuit-based cost function to work with diagrams.
+    Converts diagram → circuit → evaluates cost.
+    """
+    call_count = [0]  # Use list to allow modification in nested function
+    
+    def wrapper(diagram):
+        call_count[0] += 1
+        try:
+            # Convert diagram to circuit
+            circuit = integration.pyzx_to_qiskit(diagram)
+            
+            # Evaluate cost
+            cost = circuit_cost_fn(circuit)
+            
+            if call_count[0] % 50 == 0:  # Print every 50 calls
+                print(f"Cost evaluation {call_count[0]}: cost={cost:.2f}")
+            
+            return cost
+        except Exception as e:
+            print(f"ERROR in cost function (call {call_count[0]}): {e}")
+            import traceback
+            traceback.print_exc()
+            return float('inf')
+    
+    return wrapper
