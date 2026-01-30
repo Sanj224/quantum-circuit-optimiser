@@ -1,13 +1,14 @@
 from . import metrics
+from .. import integration
 import math
 import numpy as np
-from .. import integration
 # Add up all the metrics
+
 def naive_loss(circuit):
     a = metrics.circuit_qubit_count(circuit)
     b = metrics.circuit_two_qubit_gate_count(circuit)
     c = metrics.circuit_gate_count(circuit)
-    d = metrics.circuit_clifford_gate_count(circuit)
+    d = metrics.circuit_depth(circuit)
     e = metrics.circuit_t_gate_count(circuit)
     return 0.2*a+0.2*b+0.2*c+0.2*d+0.2*e
 
@@ -15,7 +16,7 @@ def informed_loss(circuit):
     a = metrics.circuit_qubit_count(circuit)
     b = metrics.circuit_two_qubit_gate_count(circuit)
     c = metrics.circuit_gate_count(circuit)
-    d = metrics.circuit_clifford_gate_count(circuit)
+    d = metrics.circuit_depth(circuit)
     e = metrics.circuit_t_gate_count(circuit)
     return 0.1*a+0.2*b+0.1*c+0.1*d+0.5*e
 
@@ -51,11 +52,31 @@ def exponential_loss_diagram(diagram):
         0.65 * np.exp(0.1 * e)
     )
 
-def quadratic_loss_circuit(circuit):
+def log_weighted_loss(circuit):
+    """Logarithmic scaling for smoother cost landscape"""
+    import numpy as np
+    
     q = metrics.circuit_qubit_count(circuit)
     g2 = metrics.circuit_two_qubit_gate_count(circuit)
     g = metrics.circuit_gate_count(circuit)
     gC = metrics.circuit_clifford_gate_count(circuit)
+    t = metrics.circuit_t_gate_count(circuit)
+    d = circuit.depth()
+    
+    return (
+        1.0 * q +
+        3.0 * np.log1p(g2) +      # log(1 + x) grows slower
+        0.2 * np.log1p(g) +
+        0.1 * np.log1p(gC) +
+        8.0 * np.log1p(t) +       # Still heavy penalty but smoother
+        0.5 * np.log1p(d)
+    )
+
+def quadratic_loss_circuit(circuit):
+    q = metrics.circuit_qubit_count(circuit)
+    g2 = metrics.circuit_two_qubit_gate_count(circuit)
+    g = metrics.circuit_gate_count(circuit)
+    gC = metrics.circuit_depth(circuit)
     t = metrics.circuit_t_gate_count(circuit)
 
     w_q  = 0.05
@@ -67,29 +88,29 @@ def quadratic_loss_circuit(circuit):
     return (
         w_q  * q +
         w_g  * g +
-        w_gC * gC +
+        w_gC * (gC**2) +
         w_g2 * (g2 ** 2) +
         w_t  * (t ** 2)
     )
 
 
-def cost_function_from_circuit(circuit_cost_fn):
+def cost_function_from_circuit(circuit_cost_fn, converter=None):
     """
     Wraps a circuit-based cost function to work with diagrams.
-    Converts diagram → circuit → evaluates cost.
     """
-    call_count = [0]  # Use list to allow modification in nested function
+    if converter is None:
+        from .. import integration as _integration  # Note the .. (parent level)
+        converter = _integration.pyzx_to_qiskit
+    
+    call_count = [0]
     
     def wrapper(diagram):
         call_count[0] += 1
         try:
-            # Convert diagram to circuit
-            circuit = integration.pyzx_to_qiskit(diagram)
-            
-            # Evaluate cost
+            circuit = converter(diagram)
             cost = circuit_cost_fn(circuit)
             
-            if call_count[0] % 50 == 0:  # Print every 50 calls
+            if call_count[0] % 50 == 0:
                 print(f"Cost evaluation {call_count[0]}: cost={cost:.2f}")
             
             return cost
@@ -100,3 +121,20 @@ def cost_function_from_circuit(circuit_cost_fn):
             return float('inf')
     
     return wrapper
+
+
+def naive_lossa(circuit):
+    a = metrics.circuit_qubit_count(circuit) / 30.0      # Normalize!
+    b = metrics.circuit_two_qubit_gate_count(circuit) / 8.0
+    c = metrics.circuit_gate_count(circuit) / 100.0
+    d = metrics.circuit_depth(circuit) / 20.0
+    e = metrics.circuit_t_gate_count(circuit) / 6.0
+    return 0.2*a + 0.2*b + 0.2*c + 0.2*d + 0.2*e
+
+def informed_lossa(circuit):
+    a = metrics.circuit_qubit_count(circuit) / 30.0
+    b = metrics.circuit_two_qubit_gate_count(circuit) / 8.0
+    c = metrics.circuit_gate_count(circuit) / 100.0
+    d = metrics.circuit_depth(circuit) / 20.0
+    e = metrics.circuit_t_gate_count(circuit) / 6.0
+    return 0.1*a + 0.2*b + 0.1*c + 0.1*d + 0.5*e

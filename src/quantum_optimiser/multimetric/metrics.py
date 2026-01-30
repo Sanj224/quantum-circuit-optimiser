@@ -4,7 +4,13 @@ import math
 
 # Qubit count
 def circuit_qubit_count(circuit):
-    return circuit.num_qubits
+    """Count only qubits that are actually used (have gates on them)"""
+    used_qubits = set()
+    for instruction in circuit.data:
+        for qubit in instruction.qubits:
+            used_qubits.add(circuit.qubits.index(qubit))
+    
+    return len(used_qubits) if used_qubits else circuit.num_qubits
 
 # Number of gates
 def circuit_gate_count(circuit):
@@ -24,6 +30,9 @@ def circuit_clifford_gate_count(circuit):
     return sum(1 for instruction in circuit.data if instruction.operation.name in clifford_gates)
 
 
+def circuit_depth(circuit):
+    """Calculate the depth of a quantum circuit"""
+    return circuit.depth()
 
 # Qubit count
 def graph_qubit_count(graph):

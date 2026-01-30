@@ -13,16 +13,16 @@ def simulated_annealing_zx(
     max_iterations=1000,
     min_temp=0.01,
     max_no_improvement=50,
+    verbose=False,
 ):
     """
     Simulated Annealing for ZX diagram optimization.
-    Now supports neighbor functions that need cost_function parameter.
     """
     
     # Initialize
     current_diagram = diagram.copy()
     current_cost = cost_function(current_diagram)
-    
+    initial_cost = current_cost
     best_diagram = current_diagram.copy()
     best_cost = current_cost
     
@@ -32,10 +32,15 @@ def simulated_annealing_zx(
     no_improvement_count = 0
     accepted_moves = 0
     rejected_moves = 0
+    failed_conversions = 0
+    failed_neighbors = 0
         
+    if verbose:
+        print(f"Initial cost: {current_cost:.2f}")
+    
     iteration = 0
     while temperature > min_temp and iteration < max_iterations:
-        # Generate neighbor (check if function needs cost_function parameter)
+        # Generate neighbor
         try:
             import inspect
             sig = inspect.signature(get_neighbor)
@@ -48,31 +53,40 @@ def simulated_annealing_zx(
             continue
         
         if new_diagram is False:
+            failed_neighbors += 1
             iteration += 1
             continue
         
         # Evaluate new diagram
         new_cost = cost_function(new_diagram)
+        
+        # Skip if conversion failed
+        if new_cost == float('inf'):
+            failed_conversions += 1
+            iteration += 1
+            continue
+        
         delta = new_cost - current_cost
         
         # Decide whether to accept
         accept = False
-        if not integration.can_convert_to_circuit(new_diagram):
-            accept = False
-        elif delta < 0:
-            # Improvement - always accept
+        if delta < 0:
             accept = True
             no_improvement_count = 0
             
             if new_cost < best_cost:
                 best_diagram = new_diagram.copy()
                 best_cost = new_cost
+                if verbose:
+                    print(f"Iter {iteration}: NEW BEST! {best_cost:.2f} (delta: {delta:.2f})")
         else:
-            # Worse - accept with probability
             acceptance_prob = math.exp(-delta / temperature)
             if random.random() < acceptance_prob:
                 accept = True
+                if verbose and iteration % 100 == 0:
+                    print(f"Iter {iteration}: Accepted worse move (delta: {delta:.2f}, prob: {acceptance_prob:.3f})")
             no_improvement_count += 1
+        
         # Apply acceptance decision
         if accept:
             current_diagram = new_diagram
@@ -83,6 +97,8 @@ def simulated_annealing_zx(
         
         # Check for early stopping
         if no_improvement_count >= max_no_improvement:
+            if verbose:
+                print(f"Early stopping: {max_no_improvement} iterations without improvement")
             break
         
         # Cool down
@@ -99,10 +115,20 @@ def simulated_annealing_zx(
             'accepted': accept
         })
         
-        # Periodic status update
+        # Periodic status
+        if verbose and iteration % 100 == 0:
+            accept_rate = accepted_moves / (accepted_moves + rejected_moves) if (accepted_moves + rejected_moves) > 0 else 0
+            print(f"Iter {iteration}: T={temperature:.2f}, Current={current_cost:.2f}, Best={best_cost:.2f}, Accept={accept_rate:.1%}")
     
+    if verbose:
+        print(f"\n=== FINAL RESULTS ===")
+        print(f"Original cost:" initial_cost)
+        print(f"Best cost: {best_cost:.2f}")
+        print(f"Accepted: {accepted_moves}, Rejected: {rejected_moves}")
+        print(f"Failed neighbors: {failed_neighbors}, Failed conversions: {failed_conversions}")
+        print(f"Total iterations: {iteration}")
+    print(initial_cost, best_cost)
     return best_diagram, best_cost, history
-
 import random
 
 def get_neighbor_random_vertex_random_rule(diagram):
@@ -167,7 +193,7 @@ def get_neighbor_weighted_rules(diagram):
     
     if not applicable:
         # Try another vertex with random strategy
-        return get_neighbor_random_vertex_random_rule(diagram)
+        return get_neighbor_random_vertex_random_rule(diagram) 
     
     # Define rule priorities (higher = more likely to try)
     rule_weights = {
