@@ -122,7 +122,7 @@ def simulated_annealing_zx(
     
     if verbose:
         print(f"\n=== FINAL RESULTS ===")
-        print(f"Original cost:" initial_cost)
+        print(f"Original cost:", initial_cost)
         print(f"Best cost: {best_cost:.2f}")
         print(f"Accepted: {accepted_moves}, Rejected: {rejected_moves}")
         print(f"Failed neighbors: {failed_neighbors}, Failed conversions: {failed_conversions}")

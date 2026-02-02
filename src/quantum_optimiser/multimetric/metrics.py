@@ -34,6 +34,22 @@ def circuit_depth(circuit):
     """Calculate the depth of a quantum circuit"""
     return circuit.depth()
 
+# Added function to get the number of two qubit gates and the vertices for them
+def find_two_qubit(circuit):
+    qubit_pairs = []
+    instruction_index=[]
+    index = 0
+    for instruction in circuit.data:
+        if instruction.operation.num_qubits >= 2:
+            instruction_index.append(index)
+            qubits = []
+            for qubit in instruction.qubits:
+                qubits.append(circuit.qubits.index(qubit))
+            qubit_pairs.append(qubits)
+        index = index + 1
+    return qubit_pairs, instruction_index
+            
+    
 # Qubit count
 def graph_qubit_count(graph):
     return graph.qubit_count()
