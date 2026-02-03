@@ -55,18 +55,15 @@ class hardware_map:
         edge_loc = indices.index(i)
         edge = edges[edge_loc]
         path = self.find_shortest_path(edge[0],edge[1])
-        print (path)
         for j in range (len(path)-2):
-          print("swapping", path[j],path[j+1])
           new_circuit.swap(path[j],path[j+1])
-        gate = circuit.data[i].operation.name
-        print(circuit.data[i].qubits.index[1])
-        print(gate)
-        new_circuit.append(circuit.data[i])
-        print(new_circuit)
+        instruction = circuit.data[i]
+        new_instruction = instruction.replace(qubits=[new_circuit.qubits[path[j+1]],new_circuit.qubits[path[j+2]]])
 
-        for j in range (reversed((len(path)-2))):
-          new_circuit.swap(path[j+1],path[j])
+        new_circuit.append(new_instruction)
+
+        for j in range ((len(path)-2),0,-1):
+          new_circuit.swap(path[j-1],path[j])
           
       else:
         new_circuit.append(circuit.data[i])
@@ -82,7 +79,7 @@ class hardware_map:
       qubit1, qubit2 = edge[0], edge[1]
       distance = distance +(len(self.find_shortest_path(qubit1,qubit2)) -2)
 
-    return distance
+    return distance*2
 
   def is_compatible(self, circuit):
     """
