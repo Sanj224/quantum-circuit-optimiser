@@ -8,68 +8,99 @@ from .. import integration
 
 def try_color_change(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
     """Try to color change vertex v. Returns new graph if successful, False otherwise."""
-    if not br.check_color_change(g, v):
+    try:
+        if not br.check_color_change(g, v):
+            return False
+        g_new = g.copy()
+        success = br.color_change(g_new, v)
+        if not success:
+            return False
+        if not integration.can_convert_to_circuit(g_new):
+            return False
+        return g_new
+    except Exception:
         return False
-    g_new = g.copy()
-    br.color_change(g_new, v)
-    if not integration.can_convert_to_circuit(g_new):
-        return False
-    return g_new
 
 
 def try_copy_X(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
     """Try to apply copy rule for X spider. Returns new graph if successful, False otherwise."""
-    if not br.check_copy_X(g, v):
+    try:
+        if not br.check_copy_X(g, v):
+            return False
+        g_new = g.copy()
+        success = br.copy_X(g_new, v)
+        if not success:
+            return False
+        if not integration.can_convert_to_circuit(g_new):
+            return False
+        return g_new
+    except Exception:
         return False
-    g_new = g.copy()
-    br.copy_X(g_new, v)
-    if not integration.can_convert_to_circuit(g_new):
-        return False
-    return g_new
 
 
 def try_copy_Z(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
     """Try to apply copy rule for Z spider. Returns new graph if successful, False otherwise."""
-    if not br.check_copy_Z(g, v):
+    try:
+        if not br.check_copy_Z(g, v):
+            return False
+        g_new = g.copy()
+        success = br.copy_Z(g_new, v)  # FIXED: was pi_commute_Z
+        if not success:
+            return False
+        if not integration.can_convert_to_circuit(g_new):
+            return False
+        return g_new
+    except Exception:
         return False
-    g_new = g.copy()
-    br.copy_Z(g_new, v)
-    if not integration.can_convert_to_circuit(g_new):
-        return False
-    return g_new
 
 
 def try_pi_commute_Z(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
     """Try to apply pi-commutation for Z spider. Returns new graph if successful, False otherwise."""
-    if not br.check_pi_commute_Z(g, v):
+    try:
+        if not br.check_pi_commute_Z(g, v):
+            return False
+        g_new = g.copy()
+        success = br.pi_commute_Z(g_new, v)
+        if not success:
+            return False
+        if not integration.can_convert_to_circuit(g_new):
+            return False
+        return g_new
+    except Exception:
         return False
-    g_new = g.copy()
-    br.pi_commute_Z(g_new, v)
-    if not integration.can_convert_to_circuit(g_new):
-        return False
-    return g_new
 
 
 def try_pi_commute_X(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
     """Try to apply pi-commutation for X spider. Returns new graph if successful, False otherwise."""
-    if not br.check_pi_commute_X(g, v):
+    try:
+        # Don't use check_pi_commute_X - it modifies the graph!
+        if g.type(v) != zx.VertexType.X:
+            return False
+        g_new = g.copy()
+        success = br.pi_commute_X(g_new, v)
+        if not success:
+            return False
+        if not integration.can_convert_to_circuit(g_new):
+            return False
+        return g_new
+    except Exception:
         return False
-    g_new = g.copy()
-    br.pi_commute_X(g_new, v)
-    if not integration.can_convert_to_circuit(g_new):
-        return False
-    return g_new
 
 
 def try_remove_id(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
     """Try to remove identity spider. Returns new graph if successful, False otherwise."""
-    if not br.check_remove_id(g, v):
+    try:
+        if not br.check_remove_id(g, v):
+            return False
+        g_new = g.copy()
+        success = br.remove_id(g_new, v)
+        if not success:
+            return False
+        if not integration.can_convert_to_circuit(g_new):
+            return False
+        return g_new
+    except Exception:
         return False
-    g_new = g.copy()
-    br.remove_id(g_new, v)
-    if not integration.can_convert_to_circuit(g_new):
-        return False
-    return g_new
 
 
 def try_strong_comp(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
@@ -77,14 +108,17 @@ def try_strong_comp(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], boo
     Try to apply strong complementarity with v and one of its neighbors.
     Returns new graph if successful, False otherwise.
     """
-    for w in g.neighbors(v):
-        if br.check_strong_comp(g, v, w):
-            g_new = g.copy()
-            br.strong_comp(g_new, v, w)
-            if not integration.can_convert_to_circuit(g_new):
-                continue
-            return g_new
-    return False
+    try:
+        for w in g.neighbors(v):
+            if br.check_strong_comp(g, v, w):
+                g_new = g.copy()
+                br.strong_comp(g_new, v, w)
+                if not integration.can_convert_to_circuit(g_new):
+                    continue
+                return g_new
+        return False
+    except Exception:
+        return False
 
 
 def try_fuse(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
@@ -92,16 +126,17 @@ def try_fuse(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
     Try to fuse v with one of its neighbors.
     Returns new graph if successful, False otherwise.
     """
-    for w in g.neighbors(v):
-        if br.check_fuse(g, v, w):
-            g_new = g.copy()
-            br.fuse(g_new, v, w)
-            if not integration.can_convert_to_circuit(g_new):
-                continue
-        
-            return g_new
-
-    return False
+    try:
+        for w in g.neighbors(v):
+            if br.check_fuse(g, v, w):
+                g_new = g.copy()
+                br.fuse(g_new, v, w)
+                if not integration.can_convert_to_circuit(g_new):
+                    continue
+                return g_new
+        return False
+    except Exception:
+        return False
 
 
 def get_applicable_rules(g: BaseGraph[VT, ET], v: VT) -> List[str]:
@@ -110,7 +145,6 @@ def get_applicable_rules(g: BaseGraph[VT, ET], v: VT) -> List[str]:
     Actually tests each rule on a copy to ensure it will work.
     """
     applicable = []
-    # Single vertex rules - test them
     single_rules = [
         ('color_change', try_color_change),
         ('copy_X', try_copy_X),
@@ -121,41 +155,14 @@ def get_applicable_rules(g: BaseGraph[VT, ET], v: VT) -> List[str]:
         ('fuse', try_fuse),
         ('strong_comp', try_strong_comp)
     ]
-    try:
-        for rule_name, check_func in single_rules:
-            copy_g = g.copy()
-            result = check_func(copy_g, v)
-            if not result:
+    
+    for rule_name, check_func in single_rules:
+        try:
+            result = check_func(g, v) 
+            if result is not False:  
                 applicable.append(rule_name)
-            else:
-                pass
-        return applicable
-    except:
-        print("failed randomly")
-        print(f"Error checking {rule_name} for vertex {v}")
+        except Exception as e:
+            continue
+    
+    return applicable
 
-def apply_all_rules_at_vertex(g: BaseGraph[VT, ET], v: VT) -> List[Tuple[str, BaseGraph[VT, ET]]]:
-    """
-    Apply all applicable rules at vertex v.
-    Returns list of (rule_name, new_graph) tuples.
-    """
-    results = []
-    
-    # Single vertex rules
-    single_rules = [
-        ('color_change', try_color_change),
-        ('copy_X', try_copy_X),
-        ('copy_Z', try_copy_Z),
-        ('pi_commute_Z', try_pi_commute_Z),
-        ('pi_commute_X', try_pi_commute_X),
-        ('remove_id', try_remove_id),
-        ('fuse', try_fuse),
-        ('strong_comp', try_strong_comp)
-    ]
-    
-    for rule_name, rule_func in single_rules:
-        result = rule_func(g, v)
-        if result is not False:
-            results.append((rule_name, result))
-    
-    return results
