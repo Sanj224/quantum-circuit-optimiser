@@ -72,7 +72,6 @@ class hardware_map:
 
 
   def heuristic(self, circuit):
-    #CHANGE THE NAME OF THIS FUNCTION
     edges,_= metrics.find_two_qubit(circuit)
     distance  = 0 
     for edge in edges:
@@ -82,9 +81,6 @@ class hardware_map:
     return distance*2
 
   def is_compatible(self, circuit):
-    """
-    Given a circuit, is it comptabile on the hardware, need to check that no extra gates are required
-    """
     if self.heuristic(circuit) == 0:
       return True
     else:

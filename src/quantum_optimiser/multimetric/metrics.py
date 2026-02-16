@@ -46,7 +46,7 @@ def find_two_qubit(circuit):
             for qubit in instruction.qubits:
                 qubits.append(circuit.qubits.index(qubit))
             qubit_pairs.append(qubits)
-        index = index + 1
+        index = index + 1 
     return qubit_pairs, instruction_index
             
     

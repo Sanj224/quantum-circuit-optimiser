@@ -3,6 +3,7 @@
 import pyzx
 from qiskit import QuantumCircuit, qasm3, qasm2
 from pyzx.circuit import Circuit
+from qiskit import transpile
 
 def qiskit_to_pyzx(qc):
   """

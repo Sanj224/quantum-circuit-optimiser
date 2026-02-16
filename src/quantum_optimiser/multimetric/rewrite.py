@@ -82,7 +82,7 @@ def try_strong_comp(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], boo
             g_new = g.copy()
             br.strong_comp(g_new, v, w)
             if not integration.can_convert_to_circuit(g_new):
-                return False
+                continue
             return g_new
     return False
 
@@ -97,7 +97,8 @@ def try_fuse(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
             g_new = g.copy()
             br.fuse(g_new, v, w)
             if not integration.can_convert_to_circuit(g_new):
-                return False
+                continue
+        
             return g_new
 
     return False
@@ -109,54 +110,29 @@ def get_applicable_rules(g: BaseGraph[VT, ET], v: VT) -> List[str]:
     Actually tests each rule on a copy to ensure it will work.
     """
     applicable = []
-    
     # Single vertex rules - test them
     single_rules = [
-        ('color_change', br.check_color_change, br.color_change),
-        ('copy_X', br.check_copy_X, br.copy_X),
-        ('copy_Z', br.check_copy_Z, br.copy_Z),
-        ('pi_commute_Z', br.check_pi_commute_Z, br.pi_commute_Z),
-        ('pi_commute_X', br.check_pi_commute_X, br.pi_commute_X),
-        ('remove_id', br.check_remove_id, br.remove_id),
+        ('color_change', try_color_change),
+        ('copy_X', try_copy_X),
+        ('copy_Z', try_copy_Z),
+        ('pi_commute_Z', try_pi_commute_Z),
+        ('pi_commute_X', try_pi_commute_X),
+        ('remove_id', try_remove_id),
+        ('fuse', try_fuse),
+        ('strong_comp', try_strong_comp)
     ]
-    
-    for rule_name, check_func, apply_func in single_rules:
-        try:
-            if check_func(g, v):
-                # Actually try applying it to a copy
-                g_test = g.copy()
-                apply_func(g_test, v)
-                # If we got here without exception, it works
-                applicable.append(rule_name)
-        except Exception:
-            # Rule failed, don't add it
-            pass
-    
-    # Pair-wise rules - test them
     try:
-        neighbors = list(g.neighbors(v))
-        for w in neighbors:
-            # Test strong_comp
-            try:
-                if br.check_strong_comp(g, v, w):
-                    g_test = g.copy()
-                    br.strong_comp(g_test, v, w)
-                    applicable.append(f'strong_comp_with_{w}')
-            except Exception:
+        for rule_name, check_func in single_rules:
+            copy_g = g.copy()
+            result = check_func(copy_g, v)
+            if not result:
+                applicable.append(rule_name)
+            else:
                 pass
-            
-            # Test fuse
-            try:
-                if br.check_fuse(g, v, w):
-                    g_test = g.copy()
-                    br.fuse(g_test, v, w)
-                    applicable.append(f'fuse_with_{w}')
-            except Exception:
-                pass
-    except Exception:
-        pass
-    
-    return applicable
+        return applicable
+    except:
+        print("failed randomly")
+        print(f"Error checking {rule_name} for vertex {v}")
 
 def apply_all_rules_at_vertex(g: BaseGraph[VT, ET], v: VT) -> List[Tuple[str, BaseGraph[VT, ET]]]:
     """
@@ -173,23 +149,13 @@ def apply_all_rules_at_vertex(g: BaseGraph[VT, ET], v: VT) -> List[Tuple[str, Ba
         ('pi_commute_Z', try_pi_commute_Z),
         ('pi_commute_X', try_pi_commute_X),
         ('remove_id', try_remove_id),
+        ('fuse', try_fuse),
+        ('strong_comp', try_strong_comp)
     ]
     
     for rule_name, rule_func in single_rules:
         result = rule_func(g, v)
         if result is not False:
             results.append((rule_name, result))
-    
-    # Pair-wise rules
-    for w in g.neighbors(v):
-        if br.check_strong_comp(g, v, w):
-            g_new = g.copy()
-            br.strong_comp(g_new, v, w)
-            results.append((f'strong_comp_with_{w}', g_new))
-        
-        if br.check_fuse(g, v, w):
-            g_new = g.copy()
-            br.fuse(g_new, v, w)
-            results.append((f'fuse_with_{w}', g_new))
     
     return results
