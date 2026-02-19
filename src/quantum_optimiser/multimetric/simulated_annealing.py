@@ -4,6 +4,7 @@ import random
 import math
 import pyzx
 import random
+from . import loss
 
 def simulated_annealing_zx(
     diagram,
@@ -14,16 +15,20 @@ def simulated_annealing_zx(
     max_iterations=1000,
     min_temp=0.01,
     max_no_improvement=50,
+    hardware=None
 ):
     """
     Simulated Annealing for ZX diagram optimization.
     """
     # Initialize
+    cost_function = loss.cost_function_from_circuit(cost_function, None, hardware)
     current_diagram = diagram.copy()
     current_cost = cost_function(current_diagram)
-    initial_cost = current_cost
     best_diagram = current_diagram.copy()
+    initial_cost = current_cost
     best_cost = current_cost
+    
+
     
     temperature = initial_temp
     history = []
@@ -65,7 +70,7 @@ def simulated_annealing_zx(
             if random.random() < acceptance_prob:
                 accept = True
             no_improvement_count += 1
-        print("\nWe are on iteration ",iteration,"Our new cost is ",new_cost, "accept=",accept, "our best is ", best_cost)
+        #print("\nWe are on iteration ",iteration,"Our new cost is ",new_cost, "accept=",accept, "our best is ", best_cost)
         # Apply acceptance decision
         if accept:
             current_diagram = new_diagram
@@ -93,12 +98,17 @@ def simulated_annealing_zx(
         })
         
     print(initial_cost, best_cost)
-    return best_diagram, best_cost, history
+    best_circuit = integration.pyzx_to_qiskit(best_diagram)
+    if hardware is not None:
+        print (best_circuit)
+        best_circuit = hardware.make_compatible(best_circuit)
+        print(hardware.is_compatible(best_circuit))
+    return best_circuit, best_diagram, best_cost, history
 
 
 ## neighbour strategies
 
-def get_neighbor_random_vertex_random_rule(diagram):
+def get_neighbor_random_vertex_random_rule(diagram): 
     """
     Apply a random rule to a random vertex.
     Uses get_applicable_rules to avoid trying invalid moves.
@@ -122,7 +132,7 @@ def get_neighbor_random_vertex_random_rule(diagram):
         
         # Try each applicable rule
         for rule_name in applicable:
-            print("we try ",rule_name)
+            #print("we try ",rule_name)
             try:
                 # Handle pair-wise rules
                 if 'fuse_with_' in rule_name:

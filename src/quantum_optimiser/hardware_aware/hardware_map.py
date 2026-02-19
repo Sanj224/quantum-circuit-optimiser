@@ -32,7 +32,7 @@ class hardware_map:
     Will be used as a heuristic to inform hardware aware optimisation
     """
     return (nx.shortest_path(self.mapping, qubit1, qubit2)) 
-
+ 
   def conflicts(self, circuit):
     # Get all the two qubit gates that are causing issues, as well as their indices
     edges,indices= metrics.find_two_qubit(circuit)
@@ -86,12 +86,3 @@ class hardware_map:
     else:
       return False
    
-
-## Construct a set of default hardware
-## TO-DO: Make sure to research existing ones
-
-connections = [[0,1],[0,2],[0,3],[0,4],[1,2],[1,3],[1,4],[2,3],[2,4],[3,4]]
-defaultHardware = hardware_map(5,connections)
-
-conns = [[0,1],[1,2],[2,3],[3,4]]
-linkedHardware= hardware_map(5,conns)
