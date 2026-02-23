@@ -1,11 +1,15 @@
 from . import hardware_map
+from qiskit_ibm_runtime.fake_provider import FakeSherbrooke
 
-## Testing hardware
 
-connections = [[0,1],[0,2],[0,3],[0,4],[1,2],[1,3],[1,4],[2,3],[2,4],[3,4]]
-defaultHardware = hardware_map.hardware_map(5,connections)
-
+# Testing hardware
 conns = [[0,1],[1,2],[2,3],[3,4]]
 linkedHardware= hardware_map.hardware_map(5,conns)
 
+
+# IBM's 127 qubit processor 
+backend = FakeSherbrooke()
+connections = list(backend.coupling_map.get_edges())
+num_qubits = backend.num_qubits
+sherbrooke = hardware_map.hardware_map(num_qubits, connections)
 
