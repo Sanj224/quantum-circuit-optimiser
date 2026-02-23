@@ -1,5 +1,7 @@
 qiskit==1.2.2
-pyzx==0.8.1
+pyzx==0.8.0
 matplotlib
 numpy
 jupyter
+qiskit_ibm_runtime
+networkx
