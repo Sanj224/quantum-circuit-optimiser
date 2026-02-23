@@ -9,8 +9,11 @@ src/quantum_optimiser.egg-info/dependency_links.txt
 src/quantum_optimiser.egg-info/requires.txt
 src/quantum_optimiser.egg-info/top_level.txt
 src/quantum_optimiser/hardware_aware/__init__.py
+src/quantum_optimiser/hardware_aware/hardware_map.py
+src/quantum_optimiser/hardware_aware/hardwares.py
 src/quantum_optimiser/multimetric/__init__.py
 src/quantum_optimiser/multimetric/loss.py
 src/quantum_optimiser/multimetric/metrics.py
 src/quantum_optimiser/multimetric/rewrite.py
+src/quantum_optimiser/multimetric/simulated_annealing.py
 src/quantum_optimiser/noise_model/__init__.py

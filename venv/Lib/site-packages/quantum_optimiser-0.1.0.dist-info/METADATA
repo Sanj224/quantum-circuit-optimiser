@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: quantum_optimiser
+Version: 0.1.0
+Summary: A ZX calculus-based quantum circuit optimiser
+Author: Sanjana Darbha
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: qiskit
+Requires-Dist: pyzx
+Requires-Dist: numpy
+Requires-Dist: matplotlib
