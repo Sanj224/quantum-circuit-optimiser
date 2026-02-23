@@ -34,21 +34,22 @@ class hardware_map:
     return (nx.shortest_path(self.mapping, qubit1, qubit2)) 
  
   def conflicts(self, circuit):
-    # Get all the two qubit gates that are causing issues, as well as their indices
-    edges,indices= metrics.find_two_qubit(circuit)
-    conflict_edges, conflict_indices = [],[]
-    for edge in edges:
-      qubit1, qubit2 = edge[0], edge[1]
-      path = self.find_shortest_path(qubit1,qubit2)
-      distance =  len(path) - 2
-      if distance != 0:
-        conflict_edges.append(edge)
-        conflict_indices.append(indices[edges.index(edge)])
-    return conflict_edges, conflict_indices
+      edges, indices = metrics.find_two_qubit(circuit)
+      conflict_edges, conflict_indices = [], []
+      for i, edge in enumerate(edges):
+          qubit1, qubit2 = edge[0], edge[1]
+          path = self.find_shortest_path(qubit1, qubit2)
+          distance = len(path) - 2
+          if distance != 0:
+              conflict_edges.append(edge)
+              conflict_indices.append(indices[i])
+      return conflict_edges, conflict_indices
  
 
   def make_compatible(self, circuit):
+
     edges, indices = self.conflicts(circuit)
+
     new_circuit = QuantumCircuit(circuit.num_qubits,circuit.num_clbits)
     for i in range (len(circuit.data)):
       if i in indices:
@@ -59,7 +60,6 @@ class hardware_map:
           new_circuit.swap(path[j],path[j+1])
         instruction = circuit.data[i]
         new_instruction = instruction.replace(qubits=[new_circuit.qubits[path[j+1]],new_circuit.qubits[path[j+2]]])
-
         new_circuit.append(new_instruction)
 
         for j in range ((len(path)-2),0,-1):

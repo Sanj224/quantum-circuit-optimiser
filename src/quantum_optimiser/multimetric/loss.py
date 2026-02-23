@@ -76,7 +76,7 @@ def cost_function_from_circuit(circuit_cost_fn, converter=None,hardware=None):
     Wraps a circuit-based cost function to work with diagrams.
     """
     if converter is None:
-        from .. import integration as _integration  # Note the .. (parent level)
+        from .. import integration as _integration  
         converter = _integration.pyzx_to_qiskit
     
     call_count = [0]

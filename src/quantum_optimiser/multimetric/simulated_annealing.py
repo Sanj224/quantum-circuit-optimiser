@@ -37,7 +37,6 @@ def simulated_annealing_zx(
     accepted_moves = 0
     rejected_moves = 0
     failed_conversions = 0
-    failed_neighbors = 0    
     iteration = 0
 
     while temperature > min_temp and iteration < max_iterations:
@@ -103,6 +102,7 @@ def simulated_annealing_zx(
         print (best_circuit)
         best_circuit = hardware.make_compatible(best_circuit)
         print(hardware.is_compatible(best_circuit))
+
     return best_circuit, best_diagram, best_cost, history
 
 
