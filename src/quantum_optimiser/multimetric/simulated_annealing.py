@@ -7,7 +7,7 @@ import random
 from . import loss
 
 def simulated_annealing_zx(
-    diagram,
+    circuit,
     cost_function,
     get_neighbor,
     initial_temp=100.0,
@@ -21,9 +21,10 @@ def simulated_annealing_zx(
     Simulated Annealing for ZX diagram optimization.
     """
     # Initialize
+    diagram = integration.qiskit_to_pyzx(circuit)
+    current_cost = cost_function(circuit)
     cost_function = loss.cost_function_from_circuit(cost_function, None, hardware)
     current_diagram = diagram.copy()
-    current_cost = cost_function(current_diagram)
     best_diagram = current_diagram.copy()
     initial_cost = current_cost
     best_cost = current_cost
@@ -96,19 +97,59 @@ def simulated_annealing_zx(
             'accepted': accept
         })
         
-    print(initial_cost, best_cost)
     best_circuit = integration.pyzx_to_qiskit(best_diagram)
     if hardware is not None:
-        print (best_circuit)
         best_circuit = hardware.make_compatible(best_circuit)
-        print(hardware.is_compatible(best_circuit))
 
+    #print(initial_cost, best_cost)
     return best_circuit, best_diagram, best_cost, history
 
 
 ## neighbour strategies
 
-def get_neighbor_random_vertex_random_rule(diagram): 
+def get_neighbour_all_vertices(diagram, k=10):
+    rule_weights = {
+        'remove_id': 0.30, 'fuse': 0.25, 'strong_comp': 0.20,
+        'pi_commute_Z': 0.10, 'pi_commute_X': 0.10,
+        'color_change': 0.03, 'copy_X': 0.01, 'copy_Z': 0.01,
+    }
+
+    vertices = list(diagram.vertices())
+    if not vertices:
+        return False
+
+    # sample up to k vertices to consider
+    sample = vertices if len(vertices) <= k else random.sample(vertices, k)
+
+    # stream-weighted pick among sampled vertices
+    chosen = None
+    total = 0.0
+    for v in sample:
+        for rule_name in rewrite.get_applicable_rules(diagram, v) or ():
+            base = rule_name.split('_with_', 1)[0]
+            w = rule_weights.get(base, 0.05)
+            total += w
+            if random.random() * total < w:
+                chosen = (v, rule_name)
+
+    if chosen is None:
+        return False
+
+    v, rule_name = chosen
+    try:
+        if 'fuse_with_' in rule_name:
+            return rewrite.try_fuse(diagram, v) or False
+        if 'strong_comp_with_' in rule_name:
+            return rewrite.try_strong_comp(diagram, v) or False
+        # avoid getattr overhead by using a dict mapping (next tip)
+        rule_func = getattr(rewrite, f"try_{rule_name}")
+        return rule_func(diagram, v) or False
+    except Exception:
+        return False
+
+    
+
+def get_neighbor_random_vertex_random_rule(diagram):  
     """
     Apply a random rule to a random vertex.
     Uses get_applicable_rules to avoid trying invalid moves.

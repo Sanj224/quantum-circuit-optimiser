@@ -5,3 +5,5 @@ numpy
 jupyter
 qiskit_ibm_runtime
 networkx
+pylatexenc
+qiskit-aer

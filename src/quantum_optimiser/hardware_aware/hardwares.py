@@ -7,7 +7,7 @@ conns = [[0,1],[1,2],[2,3],[3,4]]
 linkedHardware= hardware_map.hardware_map(5,conns)
 
 
-# IBM's 127 qubit processor 
+# IBM's 127 qubit processor: Sherbrooke
 backend = FakeSherbrooke()
 connections = list(backend.coupling_map.get_edges())
 num_qubits = backend.num_qubits

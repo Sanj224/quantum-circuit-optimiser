@@ -19,7 +19,6 @@ def informed_loss(circuit, hardware=None):
     b = metrics.circuit_two_qubit_gate_count(circuit)
     if hardware is not None:
         b = b + hardware.heuristic(circuit)
-
     c = metrics.circuit_gate_count(circuit)
     d = metrics.circuit_depth(circuit)
     e = metrics.circuit_t_gate_count(circuit)

@@ -1,11 +1,10 @@
-## Contains a class that represents the hardware map in the form of a graph 
-## Add a gate set??? 
+## Contains a class that represents the hardware constraints of the graph
 import networkx as nx
 from ..multimetric import metrics
 from qiskit import QuantumCircuit
 
 class hardware_map:
-  def __init__(self, qubits, connections):
+  def __init__(self, qubits, connections,qubit_info,gate_info):
     self.qubits = qubits
     self.connections = connections
     ## Quick Error handling
