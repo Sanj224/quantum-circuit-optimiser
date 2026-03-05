@@ -4,7 +4,7 @@ from ..multimetric import metrics
 from qiskit import QuantumCircuit
 
 class hardware_map:
-  def __init__(self, qubits, connections,qubit_info,gate_info):
+  def __init__(self, qubits, connections):
     self.qubits = qubits
     self.connections = connections
     ## Quick Error handling
@@ -46,29 +46,33 @@ class hardware_map:
  
 
   def make_compatible(self, circuit):
-
-    edges, indices = self.conflicts(circuit)
-
-    new_circuit = QuantumCircuit(circuit.num_qubits,circuit.num_clbits)
-    for i in range (len(circuit.data)):
-      if i in indices:
-        edge_loc = indices.index(i)
-        edge = edges[edge_loc]
-        path = self.find_shortest_path(edge[0],edge[1])
-        for j in range (len(path)-2):
-          new_circuit.swap(path[j],path[j+1])
-        instruction = circuit.data[i]
-        new_instruction = instruction.replace(qubits=[new_circuit.qubits[path[j+1]],new_circuit.qubits[path[j+2]]])
-        new_circuit.append(new_instruction)
-
-        for j in range ((len(path)-2),0,-1):
-          new_circuit.swap(path[j-1],path[j])
-          
-      else:
-        new_circuit.append(circuit.data[i])
-    return new_circuit
+      n = circuit.num_qubits
       
+      # build a subgraph using only the first n qubits
+      subgraph = self.mapping.subgraph(range(n))
 
+      edges, indices = self.conflicts(circuit)
+      new_circuit = QuantumCircuit(n, circuit.num_clbits)
+      
+      for i in range(len(circuit.data)):
+          if i in indices:
+              edge_loc = indices.index(i)
+              edge = edges[edge_loc]
+              # use subgraph path instead of full hardware path
+              path = nx.shortest_path(subgraph, edge[0], edge[1])
+              
+              for j in range(len(path) - 2):
+                  new_circuit.swap(path[j], path[j + 1])
+              instruction = circuit.data[i]
+              new_instruction = instruction.replace(
+                  qubits=[new_circuit.qubits[path[-2]], new_circuit.qubits[path[-1]]]
+              )
+              new_circuit.append(new_instruction)
+              for j in range(len(path) - 2, 0, -1):
+                  new_circuit.swap(path[j - 1], path[j])
+          else:
+              new_circuit.append(circuit.data[i])
+      return new_circuit
 
   def heuristic(self, circuit):
     edges,_= metrics.find_two_qubit(circuit)
@@ -84,4 +88,4 @@ class hardware_map:
       return True
     else:
       return False
-   
+    

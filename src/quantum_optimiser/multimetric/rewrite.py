@@ -2,6 +2,8 @@
 
 import pyzx as zx
 from pyzx import basicrules as br
+from pyzx import rules
+
 from pyzx.graph.base import BaseGraph, VT, ET
 from typing import Union, List, Tuple, Optional
 from .. import integration
@@ -138,6 +140,36 @@ def try_fuse(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
     except Exception:
         return False
 
+def try_lcomp(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
+    try:
+        g_new = g.copy()
+        matches = rules.match_lcomp_parallel(g_new)
+        vertices = rules.lcomp(g_new,matches)  # takes a list
+        if vertices is None:
+            return False
+        if not integration.can_convert_to_circuit(g_new):
+            print("got here")
+            return False
+        return g_new
+    except Exception:
+        return False
+
+
+def try_pivot(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
+    try:
+        for w in g.neighbors(v):
+            g_new = g.copy()
+            matches = rules.match_pivot_parallel(g_new)
+            result = rules.pivot(g_new,matches)  
+            if result is None:
+                continue
+            if not integration.can_convert_to_circuit(g_new):
+                continue
+            return g_new
+        return False
+    except Exception:
+        return False
+
 
 def get_applicable_rules(g: BaseGraph[VT, ET], v: VT) -> List[str]:
     """
@@ -153,8 +185,9 @@ def get_applicable_rules(g: BaseGraph[VT, ET], v: VT) -> List[str]:
         ('pi_commute_X', try_pi_commute_X),
         ('remove_id', try_remove_id),
         ('fuse', try_fuse),
-        ('strong_comp', try_strong_comp)
-    ]
+        ('strong_comp', try_strong_comp),
+        ('lcomp', try_lcomp),
+        ('pivot', try_pivot)]
     
     for rule_name, check_func in single_rules:
         try:
