@@ -5,15 +5,18 @@ from qiskit import QuantumCircuit, qasm3, qasm2
 from pyzx.circuit import Circuit
 from qiskit import transpile
 
+from qiskit.compiler import transpile
 
 def qiskit_to_pyzx(qc):
-  """
-  Turn a qiskit circuit to a pyzx diagram
-  """
-  qasm_circuit = qasm3.dumps(qc)
-  circuit = Circuit.from_qasm(qasm_circuit)
-  graph = circuit.to_graph()
-  return graph
+    """
+    Turn a qiskit circuit to a pyzx diagram
+    """
+    # always decompose to basic gates PyZX understands
+    qc_basic = transpile(qc, basis_gates=["cx", "h", "t", "tdg", "s", "sdg", "x", "y", "z", "rz"], optimization_level=0)
+    qasm_circuit = qasm2.dumps(qc_basic)
+    circuit = Circuit.from_qasm(qasm_circuit)
+    graph = circuit.to_graph()
+    return graph
 
 # this function will convert a PyZX circuit back to a qiskit circuit
 def pyzx_to_qiskit(diagram): 

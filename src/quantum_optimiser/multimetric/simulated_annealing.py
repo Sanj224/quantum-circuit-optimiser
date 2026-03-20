@@ -134,8 +134,8 @@ def simulated_annealing_zx(
     best_circuit = integration.pyzx_to_qiskit(best_diagram)
     if hardware is not None:
         best_circuit = hardware.make_compatible(best_circuit)
-    print(swap_succes,swap_try)
-    #print(initial_cost, best_cost)
+    #print(swap_succes,swap_try)
+    print(initial_cost, best_cost)
     return best_circuit, best_diagram, best_cost, history
 
 
