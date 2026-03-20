@@ -13,12 +13,18 @@ def circuit_qubit_count(circuit):
     return len(used_qubits) if used_qubits else circuit.num_qubits
 
 # Number of gates
-def circuit_gate_count(circuit):
-    return len(circuit.data)
+def circuit_gate_count(circuit,hardware=None):
+    if hardware == None:
+        return len(circuit.data)
+    else: 
+        return (len(circuit.data) + hardware.heuristic(circuit))
 
 # Number of two qubit gates
-def circuit_two_qubit_gate_count(circuit):
-    return sum(1 for instruction in circuit.data if instruction.operation.num_qubits == 2)
+def circuit_two_qubit_gate_count(circuit,hardware=None):
+    if hardware == None:
+        return sum(1 for instruction in circuit.data if instruction.operation.num_qubits == 2)
+    else: 
+        return ((sum(1 for instruction in circuit.data if instruction.operation.num_qubits == 2)) + hardware.heuristic(circuit))
 
 # Number of T gates
 def circuit_t_gate_count(circuit):

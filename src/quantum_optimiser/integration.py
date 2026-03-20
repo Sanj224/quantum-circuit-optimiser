@@ -47,4 +47,3 @@ def can_convert_to_circuit(diagram):
         return True
     except Exception:
         return False
-

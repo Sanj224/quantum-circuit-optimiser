@@ -20,33 +20,53 @@ def simulated_annealing_zx(
     """
     Simulated Annealing for ZX diagram optimization.
     """
-    # Initialize
     diagram = integration.qiskit_to_pyzx(circuit)
-    current_cost = cost_function(circuit)
-    cost_function = loss.cost_function_from_circuit(cost_function, None, hardware)
-    current_diagram = diagram.copy()
-    best_diagram = current_diagram.copy()
-    initial_cost = current_cost
-    best_cost = current_cost
-    
+    roundtrip = integration.pyzx_to_qiskit(diagram)
+    baseline = loss._compute_stats(roundtrip)
+    cost_function = loss.cost_function_from_circuit(cost_function, None, hardware, baseline)
 
-    
+    current_diagram = diagram
+    current_cost = cost_function(diagram)  
+    best_diagram = diagram.copy()
+    best_cost = current_cost
+    initial_cost = current_cost
+
     temperature = initial_temp
     history = []
     
+    best_no_improvement_count = 0
     no_improvement_count = 0
     accepted_moves = 0
     rejected_moves = 0
     failed_conversions = 0
     iteration = 0
-
+    swap_try = 0
+    swap_succes = 0
     while temperature > min_temp and iteration < max_iterations:
         # Generate neighbor and evaluate it
-        circuit_copy = current_diagram.copy()
-        new_diagram = get_neighbor(circuit_copy)    
-        new_cost = cost_function(new_diagram)
         
-        # Skip if conversion failed
+        new_diagram = get_neighbor(current_diagram)    
+        if hardware is not None:
+            swap_try += 1
+            new_circuit = integration.pyzx_to_qiskit(new_diagram)
+            candidate = hardware.try_qubit_permutation(new_circuit)
+            if candidate is not None:
+                swap_succes += 1
+                candidate_diagram = integration.qiskit_to_pyzx(candidate)
+                candidate_cost = cost_function(candidate_diagram)
+                new_diagram_cost = cost_function(new_diagram)
+                if candidate_cost < new_diagram_cost:
+                    new_diagram = candidate_diagram
+                    new_cost = candidate_cost
+                else:
+                    new_cost = new_diagram_cost
+            else:
+                new_cost = cost_function(new_diagram)
+            
+
+        else:
+            new_cost = cost_function(new_diagram)
+            
         if new_cost == float('inf'):
             failed_conversions += 1
             iteration += 1
@@ -58,18 +78,22 @@ def simulated_annealing_zx(
         if delta < 0:
             # Accept if the new circuit is an improvement to the old one
             accept = True
-            no_improvement_count = 0
-            
+            no_improvement_count= 0
             if new_cost < best_cost:
                 ## Update the best diagram if we have found something better
+                #print("we have an improvement")
                 best_diagram = new_diagram.copy()
                 best_cost = new_cost
+                best_no_improvement_count = 0
+            else:
+                best_no_improvement_count += 1
         else:
             #If the new circuit does not offer us an improvement, then we accent with a probability
             acceptance_prob = math.exp(-delta / temperature)
             if random.random() < acceptance_prob:
                 accept = True
-            no_improvement_count += 1
+                no_improvement_count += 1
+                best_no_improvement_count +=1
         #print("\nWe are on iteration ",iteration,"Our new cost is ",new_cost, "accept=",accept, "our best is ", best_cost)
         # Apply acceptance decision
         if accept:
@@ -79,12 +103,22 @@ def simulated_annealing_zx(
         else:
             rejected_moves += 1
         
-        # If we haven't found an improvement then we stop early
-        if no_improvement_count >= max_no_improvement:
-            break
+        #If we haven't found an improvement then we go back to our original diagram 
+        if best_no_improvement_count >= max_no_improvement:
+            # restart from best known solution
+            #print("had to go here again")
+            current_diagram = best_diagram.copy()
+            current_cost = best_cost
+            no_improvement_count = 0
+            best_no_improvement_count = 0
+            temperature = min(temperature * 2.0, initial_temp * 0.5)  # reheat a bit
+            
         
-        # Cool down, so the probability of accepting a worse move declines
-        temperature *= cooling_rate
+        # Reheat if stuck to kick us out of local minima otherwise cool down
+        if no_improvement_count > 5 and no_improvement_count % 20 == 0:
+            temperature = min(temperature * 1.5, initial_temp * 0.5)
+        else:
+            temperature *= cooling_rate
         iteration += 1
         
         # Track history
@@ -100,20 +134,35 @@ def simulated_annealing_zx(
     best_circuit = integration.pyzx_to_qiskit(best_diagram)
     if hardware is not None:
         best_circuit = hardware.make_compatible(best_circuit)
-
+    print(swap_succes,swap_try)
     #print(initial_cost, best_cost)
     return best_circuit, best_diagram, best_cost, history
 
 
 ## neighbour strategies
-
+def _apply_rule(diagram, v, rule_name):
+    try:
+        if 'fuse' in rule_name:
+            return rewrite.try_fuse(diagram, v)
+        if 'strong_comp' in rule_name:
+            return rewrite.try_strong_comp(diagram, v)
+        rule_func = getattr(rewrite, f'try_{rule_name}')
+        return rule_func(diagram, v)
+    except Exception:
+        return False
+    
 def get_neighbour_all_vertices(diagram, k=10):
     rule_weights = {
-        'remove_id': 0.30, 'fuse': 0.25, 'strong_comp': 0.20,
-        'pi_commute_Z': 0.10, 'pi_commute_X': 0.10,
-        'color_change': 0.03, 'copy_X': 0.01, 'copy_Z': 0.01,
-    }
-
+        'remove_id': 0.25,
+        'fuse': 0.20,
+        'strong_comp': 0.15,
+        'pi_commute_Z': 0.08,
+        'pi_commute_X': 0.05,
+        'color_change': 0.02,
+        'copy_X': 0.05,
+        'copy_Z': 0.05,
+        'lcomp': 0.10,    
+        'pivot': 0.05}
     vertices = list(diagram.vertices())
     if not vertices:
         return False
@@ -196,70 +245,105 @@ def get_neighbor_random_vertex_random_rule(diagram):
     
     return False
 
-
 def get_neighbor_weighted_rules(diagram):
-    """
-    Apply rules with different probabilities.
-    Uses get_applicable_rules to check validity first.
-    """
+    rule_weights = {
+        'remove_id':            0.10, 
+        'fuse':                 0.15,  
+        'strong_comp':          0.20,  
+        'lcomp':                0.20,  
+        'pivot':                0.15,  
+        'pi_commute_Z':         0.07,
+        'pi_commute_X':         0.07,
+        'split_spider':         0.03,
+        'insert_hadamard_pair': 0.01,
+        'color_change':         0.01,
+        'copy_X':               0.01,
+        'copy_Z':               0.01,
+    }
+    
     vertices = list(diagram.vertices())
     if not vertices:
         return False
-    
-    v = random.choice(vertices)
-    
-    # Get applicable rules
-    applicable = rewrite.get_applicable_rules(diagram, v)
-    
-    if not applicable:
-        # Try another vertex with random strategy
-        return get_neighbor_random_vertex_random_rule(diagram) 
-    
-    # Define rule priorities (higher = more likely to try)
+
+    random.shuffle(vertices)
+    for v in vertices:
+        # Build full rule list, weighted sample without replacement until one works
+        rules = list(rule_weights.keys())
+        weights = list(rule_weights.values())
+        
+        while rules:
+            chosen = random.choices(rules, weights=weights, k=1)[0]
+            idx = rules.index(chosen)
+            rules.pop(idx)
+            weights.pop(idx)
+            result = _apply_rule(diagram, v, chosen)
+            if result is not False and integration.can_convert_to_circuit(result):
+                return result
+
+    return False
+
+
+
+def get_neighbor_high_degree(diagram, top_k=5):
+    """
+    Prioritise high-degree vertices — they contribute most to two-qubit gate count.
+    Samples from the top_k highest-degree vertices, weighted by degree.
+    Falls back to random if no rules apply.
+    """
     rule_weights = {
-        'remove_id': 0.30,
-        'fuse': 0.25,
-        'strong_comp': 0.20,
-        'pi_commute_Z': 0.10,
-        'pi_commute_X': 0.10,
-        'color_change': 0.03,
-        'copy_X': 0.01,
-        'copy_Z': 0.01,
+        'remove_id': 0.10,
+        'fuse':        0.30,
+        'strong_comp': 0.25,
+        'lcomp':       0.20,
+        'pivot':       0.10,
+        'pi_commute_Z':0.03,
+        'pi_commute_X':0.02,
+        'add_spider':  0.03,   
+        'add_hadamard':0.02,   
     }
-    
-    # Create weighted list of applicable rules
-    weighted_applicable = []
-    for rule_name in applicable:
-        # Extract base rule name (remove _with_X suffix for pair rules)
-        base_rule = rule_name.split('_with_')[0]
-        weight = rule_weights.get(base_rule, 0.05)
-        weighted_applicable.append((weight, rule_name))
-    
-    # Sort by weight (highest first) with some randomness
-    weighted_applicable.sort(reverse=True, key=lambda x: x[0] * random.uniform(0.8, 1.2))
-    
-    # Try rules in weighted order
-    for weight, rule_name in weighted_applicable:
-        # Higher weight = higher chance to try
-        if random.random() < weight:
+    vertices = list(diagram.vertices())
+    if not vertices:
+        return False
+
+    # Rank by degree descending, take top_k
+    vertices.sort(key=lambda v: diagram.vertex_degree(v), reverse=True)
+    candidates = vertices[:top_k]
+
+    # Weight candidates by degree so highest-degree is most likely chosen
+    degrees = [diagram.vertex_degree(v) for v in candidates]
+    total_degree = sum(degrees)
+    if total_degree == 0:
+        return get_neighbor_random_vertex_random_rule(diagram)  # fallback
+
+    # Try candidates in degree-weighted order
+    random.shuffle(candidates)  
+    for v in candidates:
+        applicable = rewrite.get_applicable_rules(diagram, v)
+        if not applicable:
+            continue
+
+        # Weight applicable rules by rule_weights
+        weighted = []
+        for rule_name in applicable:
+            base = rule_name.split('_with_', 1)[0]
+            w = rule_weights.get(base, 0.05)
+            weighted.append((w, rule_name))
+
+        weighted.sort(reverse=True)  # try highest-weight rules first
+        
+        for w, rule_name in weighted:
             try:
                 if 'fuse_with_' in rule_name:
                     result = rewrite.try_fuse(diagram, v)
                 elif 'strong_comp_with_' in rule_name:
                     result = rewrite.try_strong_comp(diagram, v)
                 else:
-                    rule_func = getattr(rewrite, f'try_{rule_name}')
-                    result = rule_func(diagram, v)
-                
+                    result = getattr(rewrite, f'try_{rule_name}')(diagram, v)
+
                 if result is not False:
                     return result
-                    
-            except Exception as e:
-                print(f"Warning: Rule {rule_name} failed unexpectedly: {e}")
+            except Exception:
                 continue
-    
-    # Fallback
+
+    # Nothing worked in top_k, fall back to random
     return get_neighbor_random_vertex_random_rule(diagram)
-
-
-
