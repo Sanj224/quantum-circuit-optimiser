@@ -3,26 +3,32 @@ from .. import integration
 import math
 import numpy as np
 
-def _compute_stats(circuit):
+def _compute_stats(circuit,hardware=None):
     two_qubit = 0
     t_gates = 0
     used_qubits = set()
-    
+    if hardware is not None:
+        h= hardware.heuristic(circuit)
+    else:
+        h=0
     for instruction in circuit.data:
         op = instruction.operation
-        for qubit in instruction.qubits:
+        for qubit in instruction.qubits:    
             used_qubits.add(circuit.qubits.index(qubit))
         if op.num_qubits == 2:
             two_qubit += 1
         if op.name == 't':
             t_gates += 1
+        
+            
     
     return {
         'q':  len(used_qubits) if used_qubits else circuit.num_qubits,
         'g2': two_qubit,
         'g':  len(circuit.data),
         't':  t_gates,
-        'd':  circuit.depth()
+        'd':  circuit.depth(),
+        'swap': h
     }
 
 
@@ -49,14 +55,15 @@ def informed_loss(circuit, hardware=None, baseline=None):
 
 
 def log_weighted_loss(circuit, hardware=None, baseline=None):
-    s = _compute_stats(circuit)
+    s = _compute_stats(circuit,hardware)
     if baseline is not None:
         s = _normalise(s, baseline)
     return (
         0.5 * s['q'] +
-        7.0 * np.log1p(s['g2']) +
+        2.0 * s['swap'] +
+        7.0 * (s['g2']) +
         0.2 * np.log1p(s['g']) +
-        4.0 * np.log1p(s['t']) +
+        2.0 * np.log1p(s['t']) +
         3.0 * np.log1p(s['d'])
     )
 
@@ -83,7 +90,9 @@ def cost_function_from_circuit(circuit_cost_fn, converter=None, hardware=None, b
         try:
             circuit = converter(diagram)
             return circuit_cost_fn(circuit, hardware, baseline)
-        except Exception:
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
             return float('inf')
 
     return wrapper

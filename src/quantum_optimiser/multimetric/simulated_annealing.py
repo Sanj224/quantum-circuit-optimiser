@@ -20,13 +20,14 @@ def simulated_annealing_zx(
     """
     Simulated Annealing for ZX diagram optimization.
     """
+    
+    baseline = loss._compute_stats(circuit,hardware)
+    print("our baseline is:", baseline)
     diagram = integration.qiskit_to_pyzx(circuit)
-    roundtrip = integration.pyzx_to_qiskit(diagram)
-    baseline = loss._compute_stats(roundtrip)
     cost_function = loss.cost_function_from_circuit(cost_function, None, hardware, baseline)
 
     current_diagram = diagram
-    current_cost = cost_function(diagram)  
+    current_cost = cost_function(diagram)   
     best_diagram = diagram.copy()
     best_cost = current_cost
     initial_cost = current_cost
@@ -81,7 +82,7 @@ def simulated_annealing_zx(
             no_improvement_count= 0
             if new_cost < best_cost:
                 ## Update the best diagram if we have found something better
-                #print("we have an improvement")
+                print("we have an improvement")
                 best_diagram = new_diagram.copy()
                 best_cost = new_cost
                 best_no_improvement_count = 0
@@ -95,6 +96,7 @@ def simulated_annealing_zx(
                 no_improvement_count += 1
                 best_no_improvement_count +=1
         #print("\nWe are on iteration ",iteration,"Our new cost is ",new_cost, "accept=",accept, "our best is ", best_cost)
+        #print(loss._compute_stats(integration.pyzx_to_qiskit(diagram),hardware))
         # Apply acceptance decision
         if accept:
             current_diagram = new_diagram
@@ -106,7 +108,7 @@ def simulated_annealing_zx(
         #If we haven't found an improvement then we go back to our original diagram 
         if best_no_improvement_count >= max_no_improvement:
             # restart from best known solution
-            #print("had to go here again")
+            print("had to go here again")
             current_diagram = best_diagram.copy()
             current_cost = best_cost
             no_improvement_count = 0
@@ -130,11 +132,14 @@ def simulated_annealing_zx(
             'delta': delta,
             'accepted': accept
         })
-        
+
     best_circuit = integration.pyzx_to_qiskit(best_diagram)
+    final = loss._compute_stats(best_circuit,hardware)
+    print("our final is:", final)    
+
     if hardware is not None:
         best_circuit = hardware.make_compatible(best_circuit)
-    #print(swap_succes,swap_try)
+    print(swap_succes,swap_try)
     print(initial_cost, best_cost)
     return best_circuit, best_diagram, best_cost, history
 
@@ -217,7 +222,7 @@ def get_neighbor_random_vertex_random_rule(diagram):
         if not applicable:
             continue
         
-        # Shuffle applicable rules
+        # Shuffle a  pplicable rules
         random.shuffle(applicable)
         
         # Try each applicable rule
@@ -247,18 +252,18 @@ def get_neighbor_random_vertex_random_rule(diagram):
 
 def get_neighbor_weighted_rules(diagram):
     rule_weights = {
-        'remove_id':            0.10, 
-        'fuse':                 0.15,  
+        'remove_id':            0.25, 
+        'fuse':                 0.25,  
         'strong_comp':          0.20,  
-        'lcomp':                0.20,  
-        'pivot':                0.15,  
-        'pi_commute_Z':         0.07,
-        'pi_commute_X':         0.07,
-        'split_spider':         0.03,
-        'insert_hadamard_pair': 0.01,
+        'lcomp':                0.01,  
+        'pivot':                0.01,  
+        'pi_commute_Z':         0.02,
+        'pi_commute_X':         0.02,
+        'split_spider':         0.01,
+        'insert_hadamard_pair': 0.02,
         'color_change':         0.01,
         'copy_X':               0.01,
-        'copy_Z':               0.01,
+        'copy_Z':               0.02,
     }
     
     vertices = list(diagram.vertices())
@@ -278,6 +283,7 @@ def get_neighbor_weighted_rules(diagram):
             weights.pop(idx)
             result = _apply_rule(diagram, v, chosen)
             if result is not False and integration.can_convert_to_circuit(result):
+                print(chosen)
                 return result
 
     return False
@@ -291,16 +297,20 @@ def get_neighbor_high_degree(diagram, top_k=5):
     Falls back to random if no rules apply.
     """
     rule_weights = {
-        'remove_id': 0.10,
-        'fuse':        0.30,
-        'strong_comp': 0.25,
-        'lcomp':       0.20,
-        'pivot':       0.10,
-        'pi_commute_Z':0.03,
-        'pi_commute_X':0.02,
-        'add_spider':  0.03,   
-        'add_hadamard':0.02,   
+        'remove_id':            0.25, 
+        'fuse':                 0.25,  
+        'strong_comp':          0.20,  
+        'lcomp':                0.01,  
+        'pivot':                0.01,  
+        'pi_commute_Z':         0.02,
+        'pi_commute_X':         0.02,
+        'split_spider':         0.01,
+        'insert_hadamard_pair': 0.02,
+        'color_change':         0.01,
+        'copy_X':               0.01,
+        'copy_Z':               0.02,
     }
+    
     vertices = list(diagram.vertices())
     if not vertices:
         return False
@@ -341,9 +351,10 @@ def get_neighbor_high_degree(diagram, top_k=5):
                     result = getattr(rewrite, f'try_{rule_name}')(diagram, v)
 
                 if result is not False:
+                    print(rule_name)
                     return result
             except Exception:
                 continue
 
     # Nothing worked in top_k, fall back to random
-    return get_neighbor_random_vertex_random_rule(diagram)
+    return get_neighbor_weighted_rules(diagram)

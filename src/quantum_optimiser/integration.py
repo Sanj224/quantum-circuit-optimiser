@@ -12,8 +12,8 @@ def qiskit_to_pyzx(qc):
     Turn a qiskit circuit to a pyzx diagram
     """
     # always decompose to basic gates PyZX understands
-    qc_basic = transpile(qc, basis_gates=["cx", "h", "t", "tdg", "s", "sdg", "x", "y", "z", "rz"], optimization_level=0)
-    qasm_circuit = qasm2.dumps(qc_basic)
+    qc = transpile(qc,basis_gates=["cx", "h", "t", "tdg", "s", "sdg", "x", "y", "z","rz","swap"],optimization_level=0)
+    qasm_circuit = qasm2.dumps(qc)
     circuit = Circuit.from_qasm(qasm_circuit)
     graph = circuit.to_graph()
     return graph
@@ -34,8 +34,8 @@ def pyzx_to_qiskit(diagram):
     pyzx_circuit = Circuit.to_basic_gates(pyzx_circuit)
     pyzx_circuit = Circuit.split_phase_gates(pyzx_circuit)
     qasm_circuit = Circuit.to_qasm(pyzx_circuit)
-    qasm_circuit = QuantumCircuit.from_qasm_str(qasm_circuit)
-    circuit = transpile(qasm_circuit,basis_gates=["h","s","sdg","t","tdg","x","z","cx","cz"],optimization_level=0)
+    circuit = QuantumCircuit.from_qasm_str(qasm_circuit)
+  circuit = transpile(circuit,basis_gates=["cx", "h", "t", "tdg", "s", "sdg", "x", "y", "z","rz","swap"],optimization_level=0)
   return circuit
 
 
@@ -49,4 +49,4 @@ def can_convert_to_circuit(diagram):
         pyzx_to_qiskit(copy)
         return True
     except Exception:
-        return False
+         return False
