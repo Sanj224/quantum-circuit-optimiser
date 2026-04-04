@@ -15,42 +15,42 @@ FUNCTIONS = {
     "quadratic":    loss.quadratic_loss_circuit
 }
 
-def get_metrics(circuit, hardware):
-    s = loss._compute_stats(circuit)
-    h_penalty = hardware.heuristic(circuit) if hardware else 0
+def get_metrics(circuit, hardware=None):
+    s = loss._compute_stats(circuit,hardware)
     return {
         "qubits":    s['q'],
-        "two_qubit": s['g2'] + h_penalty,
-        "gates":     s['g']  + h_penalty,
-        "depth":     s['d'] + h_penalty,
+        "two_qubit": s['g2'],
+        "gates":     s['g'],
+        "depth":     s['d'],
         "t":         s['t'],
     }
 
 def evaluate_once(args):
     circuit, hardware = args
+    round_trip_circuit = integration.pyzx_to_qiskit(integration.qiskit_to_pyzx(circuit))
+    round_trip_circuit=hardware.make_compatible(round_trip_circuit)
     results = {}
     for name, loss_fn in FUNCTIONS.items():
-        # Establish baseline using same round-trip conversion SA will use
-        before_L = loss_fn(circuit, hardware)
-        before_m = get_metrics(circuit, hardware)
+        before_L = loss_fn(round_trip_circuit)  
+        before_m = get_metrics(round_trip_circuit)
+        #print(before_m)
 
         optimised_circuit, _, optimised_cost, _ = simulated_annealing.simulated_annealing_zx(
-            circuit=circuit,
+            circuit=circuit,  
             cost_function=loss_fn,
             get_neighbor=simulated_annealing.get_neighbor_weighted_rules,
             initial_temp=100.0,
             cooling_rate=0.95,
-            max_iterations=1000,
+            max_iterations=500,
             max_no_improvement=50,
             hardware=hardware
         )
-        after_m = get_metrics(optimised_circuit, hardware)
+        after_m = get_metrics(optimised_circuit)
         dL = before_L - optimised_cost
         dm = {k: before_m[k] - after_m[k] for k in before_m}
         results[name] = (dL, dm)
     
     return results
-
 
 def random_circuit_generator(max_qubits, max_depth):
     one_qubit_gates = ["h", "s", "sdg", "t", "tdg", "x", "z"]
@@ -73,11 +73,8 @@ def random_circuit_generator(max_qubits, max_depth):
     return qc
 
 
-def evaluate(n_circuits=10, depth=100, hardware=None):
-    if hardware is None:
-        qubits = 100
-    else:
-        qubits = hardware.qubits
+def evaluate(qubits,n_circuits=10, depth=100, hardware=None):
+
 
     circuits = [random_circuit_generator(qubits, depth) for _ in range(n_circuits)]
     args     = [(qc, hardware) for qc in circuits]

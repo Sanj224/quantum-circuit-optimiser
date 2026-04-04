@@ -1,12 +1,14 @@
-# Rewrite rules borrowed from PyZX with wrappers that return new graph objects
-
+"""
+This file contains wrappers around PyZX's rewrite rules
+"""
 import pyzx as zx
 from pyzx import basicrules as br
 from pyzx import rules
 import random
 from pyzx.graph.base import BaseGraph, VT, ET
-from typing import Union, List, Tuple, Optional
+from typing import Union
 from .. import integration
+
 def try_color_change(g: BaseGraph[VT, ET], v: VT) -> Union[BaseGraph[VT, ET], bool]:
     try:
         if not br.check_color_change(g, v):
@@ -170,8 +172,9 @@ def try_insert_hadamard_pair(g, v):
 
 
 def get_applicable_rules(g, v):
+    """For a given diagram and a vertex in the diagram, see what rules can be applied"""
     applicable = []
-    
+
     candidates = [
         ('remove_id',            try_remove_id),
         ('color_change',         try_color_change),
