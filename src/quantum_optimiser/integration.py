@@ -64,4 +64,4 @@ def can_convert_to_circuit(diagram):
         pyzx_to_qiskit(copy)
         return True
     except Exception:
-         return False
+         return False 
