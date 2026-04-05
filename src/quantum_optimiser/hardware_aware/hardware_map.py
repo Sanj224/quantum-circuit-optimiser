@@ -54,95 +54,61 @@ class hardware_map:
       return conflict_edges, conflict_indices
   
   def make_compatible(self, circuit):
-    """
-    Add swap gates to each qubit that is part of an illegal two qubit operation
-    """
     new_circuit = QuantumCircuit(self.qubits, circuit.num_clbits)
 
-    logical_to_physical = list(range(self.qubits))
-    physical_to_logical = list(range(self.qubits))
+    _, conflict_indices = self.conflicts(circuit)
+    conflict_set = set(conflict_indices)
 
-    def do_swap(pa, pb):
-        new_circuit.swap(new_circuit.qubits[pa], new_circuit.qubits[pb])
-        la = physical_to_logical[pa]
-        lb = physical_to_logical[pb]
-        logical_to_physical[la], logical_to_physical[lb] = pb, pa
-        physical_to_logical[pa], physical_to_logical[pb] = lb, la
-
-    for instruction in circuit.data:
-        if instruction.operation.num_qubits == 1:
-            l0 = circuit.qubits.index(instruction.qubits[0])
-            p0 = logical_to_physical[l0]
-            new_circuit.append(instruction.operation, [new_circuit.qubits[p0]], instruction.clbits)
-
-        elif instruction.operation.num_qubits == 2:
-            l0 = circuit.qubits.index(instruction.qubits[0])
-            l1 = circuit.qubits.index(instruction.qubits[1])
-            p0 = logical_to_physical[l0]
-            p1 = logical_to_physical[l1]
-
-            path = self.find_shortest_path(p0, p1)
+    for i, instruction in enumerate(circuit.data):
+        if i in conflict_set:
+            q0 = circuit.qubits.index(instruction.qubits[0])
+            q1 = circuit.qubits.index(instruction.qubits[1])
+            flipped = q0 > q1
+            start, end = (q0, q1) if not flipped else (q1, q0)
+            path = self.find_shortest_path(start, end)
+            # Swap qubits into adjacent positions
             for j in range(len(path) - 2):
-                do_swap(path[j], path[j + 1])
-
-            p0 = logical_to_physical[l0]
-            p1 = logical_to_physical[l1]
-            new_circuit.append(
-                instruction.operation,
-                [new_circuit.qubits[p0], new_circuit.qubits[p1]],
-                instruction.clbits
-            )
-
+                new_circuit.swap(path[j], path[j + 1])
+            # Apply gate preserving original control/target order
+            if not flipped:
+                new_circuit.append(
+                    instruction.operation,
+                    [new_circuit.qubits[path[-2]], new_circuit.qubits[path[-1]]],
+                    instruction.clbits
+                )
+            else:
+                new_circuit.append(
+                    instruction.operation,
+                    [new_circuit.qubits[path[-1]], new_circuit.qubits[path[-2]]],
+                    instruction.clbits
+                )
+            # Swap back
+            for j in reversed(range(len(path) - 2)):
+                new_circuit.swap(path[j], path[j + 1])
         else:
             new_circuit.append(instruction)
 
-    # Restore only the logical qubits the circuit actually used
-    for logical in range(circuit.num_qubits):
-        while logical_to_physical[logical] != logical:
-            phys = logical_to_physical[logical]
-            do_swap(phys, logical)
-
     return new_circuit
-
 
   def heuristic(self, circuit):
     """
-    Estimate swap cost by simulating make_compatible's routing
-    without building an actual circuit.
+    Estimate the number of swap gates required to make the circuit compatible
     """
-    logical_to_physical = list(range(self.qubits))
-    physical_to_logical = list(range(self.qubits))
     swap_count = 0
-    def do_swap(pa, pb):
-        nonlocal swap_count
-        swap_count += 1
-        la = physical_to_logical[pa]
-        lb = physical_to_logical[pb]
-        if la < len(logical_to_physical):
-            logical_to_physical[la] = pb
-        if lb < len(logical_to_physical):
-            logical_to_physical[lb] = pa
-        physical_to_logical[pa], physical_to_logical[pb] = lb, la
 
-    for instruction in circuit.data:
-        if instruction.operation.num_qubits == 2:
-            l0 = circuit.qubits.index(instruction.qubits[0])
-            l1 = circuit.qubits.index(instruction.qubits[1])
-            p0 = logical_to_physical[l0]
-            p1 = logical_to_physical[l1]
+    _, conflict_indices = self.conflicts(circuit)
+    conflict_set = set(conflict_indices)
 
-            path = self.find_shortest_path(p0, p1)
-            for j in range(len(path) - 2):
-                do_swap(path[j], path[j + 1])
-
-    # count finalisation swaps
-    for logical in range(circuit.num_qubits):
-        while logical_to_physical[logical] != logical:
-            phys = logical_to_physical[logical]
-            do_swap(phys, logical)
+    for i, instruction in enumerate(circuit.data):
+        if i in conflict_set:
+            q0 = circuit.qubits.index(instruction.qubits[0])
+            q1 = circuit.qubits.index(instruction.qubits[1])
+            path = self.find_shortest_path(q0, q1)
+            # swap there and back, so multiply by 2
+            swap_count += (len(path) - 2) * 2
 
     return swap_count
-
+  
   def is_compatible(self, circuit):
     """
     Check that no two qubit operation in a circuit violates the connectivity
@@ -154,76 +120,132 @@ class hardware_map:
     
   def try_qubit_permutation(self, circuit, n_attempts=10):
     if len(circuit.data) < 3:
-      return None
+        return None
 
-    def perm_to_swaps(p):
-      swaps, p = [], p.copy()
-      for i in range(len(p)):
-        while p[i] != i:
-          j = p[i]
-          swaps.append((i, j))
-          p[i], p[j] = p[j], p[i]
-      return swaps
+    _, conflict_indices = self.conflicts(circuit)
+    if not conflict_indices:
+        return None
 
-    def window_cost(a, b, perm):
-      cost = len(perm_to_swaps(perm)) * 4
-      for inst in circuit.data[a:b]:
-        if len(inst.qubits) == 2:
-          q0 = perm[circuit.qubits.index(inst.qubits[0])]
-          q1 = perm[circuit.qubits.index(inst.qubits[1])]
-          cost += (len(self.find_shortest_path(q0, q1)) - 2) * 2
-      return cost
+    def gate_routing_cost(q0, q1):
+        return max(0, len(self.find_shortest_path(q0, q1)) - 2) * 2
 
-    def apply_permutation_window(a, b, perm):
-      swaps = perm_to_swaps(perm)
-      new_circuit = QuantumCircuit(circuit.num_qubits, circuit.num_clbits)
-      for inst in circuit.data[:a]:
-        new_circuit.append(inst)
-      for s1, s2 in swaps:
-        new_circuit.swap(s1, s2)
-      for inst in circuit.data[a:b]:
-        new_qubits = [
-          new_circuit.qubits[perm[circuit.qubits.index(q)]]
-          for q in inst.qubits
-        ]
-        new_circuit.append(inst.operation, new_qubits, inst.clbits)
-      for s1, s2 in reversed(swaps):
-        new_circuit.swap(s1, s2)
-      for inst in circuit.data[b:]:
-        new_circuit.append(inst)
-      return new_circuit
+    def window_routing_cost(data, qubit_map):
+        """Total routing cost of all 2q gates in data, under current qubit_map."""
+        cost = 0
+        for inst in data:
+            if len(inst.qubits) == 2:
+                q0 = qubit_map[circuit.qubits.index(inst.qubits[0])]
+                q1 = qubit_map[circuit.qubits.index(inst.qubits[1])]
+                cost += gate_routing_cost(q0, q1)
+        return cost
 
-    n = circuit.num_qubits
+    def find_best_swaps(window_data):
+        """
+        Greedily find a sequence of swaps that reduces routing cost of
+        2q gates in window_data. Returns list of (p, q) physical qubit swaps.
+        """
+        n = circuit.num_qubits
+        qubit_map = list(range(n))  # logical -> physical
+        swap_sequence = []
+
+        for _ in range(n_attempts):
+            current_cost = window_routing_cost(window_data, qubit_map)
+            if current_cost == 0:
+                break
+
+            best_swap = None
+            best_cost = current_cost
+
+            # Generate candidates: first edge on shortest path for each conflicting gate
+            candidates = set()
+            for inst in window_data:
+                if len(inst.qubits) == 2:
+                    p0 = qubit_map[circuit.qubits.index(inst.qubits[0])]
+                    p1 = qubit_map[circuit.qubits.index(inst.qubits[1])]
+                    if gate_routing_cost(p0, p1) > 0:
+                        path = self.find_shortest_path(p0, p1)
+                        if len(path) >= 2:
+                            candidates.add((path[0], path[1]))
+                            candidates.add((path[-2], path[-1]))
+
+            # Score each candidate swap
+            for pa, pb in candidates:
+                trial_map = qubit_map.copy()
+                # Find logical qubits at these physical positions and swap them
+                la = trial_map.index(pa)
+                lb = trial_map.index(pb)
+                trial_map[la], trial_map[lb] = trial_map[lb], trial_map[la]
+
+                cost = window_routing_cost(window_data, trial_map)
+                if cost < best_cost:
+                    best_cost = cost
+                    best_swap = (pa, pb, la, lb)
+
+            if best_swap is None:
+                break
+
+            pa, pb, la, lb = best_swap
+            qubit_map[la], qubit_map[lb] = qubit_map[lb], qubit_map[la]
+            swap_sequence.append((pa, pb))
+
+        return swap_sequence, qubit_map
+
+    def apply_window(a, b, swap_sequence, final_qubit_map):
+        """
+        Emit: gates before window, swap-in, remapped window gates, swap-out, gates after.
+        """
+        new_circuit = QuantumCircuit(circuit.num_qubits, circuit.num_clbits)
+
+        for inst in circuit.data[:a]:
+            new_circuit.append(inst)
+
+        # Swap-in
+        for pa, pb in swap_sequence:
+            new_circuit.swap(pa, pb)
+
+        # Window gates remapped to physical positions under final_qubit_map
+        for inst in circuit.data[a:b]:
+            new_qubits = [
+                new_circuit.qubits[final_qubit_map[circuit.qubits.index(q)]]
+                for q in inst.qubits
+            ]
+            new_circuit.append(inst.operation, new_qubits, inst.clbits)
+
+        # Swap-out: reverse the swap sequence to restore qubit order
+        for pa, pb in reversed(swap_sequence):
+            new_circuit.swap(pa, pb)
+
+        for inst in circuit.data[b:]:
+            new_circuit.append(inst)
+
+        return new_circuit
+
+    # Find candidate windows: at least 2 two-qubit gates, centred on conflict indices
     best_circuit = None
     best_cost = self.heuristic(circuit)
 
-    for _ in range(n_attempts):
-      a = random.randint(0, len(circuit.data) - 2)
-      b = min(a + random.randint(2, 8), len(circuit.data))
+    seen_windows = set()
+    for ci in conflict_indices:
+        for padding in range(0, min(4, n_attempts)):
+            a = max(0, ci - padding)
+            b = min(len(circuit.data), ci + padding + 1)
+            if (a, b) in seen_windows:
+                continue
+            seen_windows.add((a, b))
 
-      active = sorted(set(
-        circuit.qubits.index(q)
-        for inst in circuit.data[a:b]
-        for q in inst.qubits
-      ))
-      if len(active) < 2:
-        continue
+            window_data = circuit.data[a:b]
+            two_qubit_gates = [inst for inst in window_data if len(inst.qubits) == 2]
+            if len(two_qubit_gates) < 2:
+                continue
 
-      identity = list(range(n))
-      baseline = window_cost(a, b, identity)
+            swap_sequence, final_qubit_map = find_best_swaps(window_data)
+            if not swap_sequence:
+                continue
 
-      pairs = list(combinations(active, 2))
-      if len(pairs) > 8:
-        pairs = random.sample(pairs, 8)
-
-      for q1, q2 in pairs:
-        perm = identity.copy()
-        perm[q1], perm[q2] = perm[q2], perm[q1]
-        if window_cost(a, b, perm) < baseline:
-          full = apply_permutation_window(a, b, perm)
-          full_cost = self.heuristic(full)
-          if full_cost < best_cost:
-            best_cost = full_cost
-            best_circuit = full
+            candidate = apply_window(a, b, swap_sequence, final_qubit_map)
+            candidate_cost = self.heuristic(candidate)
+            if candidate_cost < best_cost:
+                best_cost = candidate_cost
+                best_circuit = candidate
 
     return best_circuit

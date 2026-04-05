@@ -171,7 +171,7 @@ def get_neighbor_weighted_rules(diagram):
         'pi_commute_Z':         0.02,
         'pi_commute_X':         0.02,
         'split_spider':         0.01,
-        'insert_hadamard_pair': 0.02,
+        #'insert_hadamard_pair': 0.02,
         'color_change':         0.01,
         'copy_X':               0.01,
         'copy_Z':               0.02,
